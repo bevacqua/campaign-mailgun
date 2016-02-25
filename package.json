@@ -1,0 +1,24 @@
+{
+  "name": "campaign-mailgun",
+  "description": "Mailgun email provider for Campaign",
+  "homepage": "https://github.com/bevacqua/campaign-mailgun",
+  "author": {
+    "name": "Nicolas Bevacqua",
+    "email": "ng@bevacqua.io",
+    "url": "http://bevacqua.io"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/bevacqua/campaign-mailgun.git"
+  },
+  "version": "1.0.0",
+  "licenses": "MIT",
+  "main": "mailgun.js",
+  "dependencies": {
+    "contra": "1.9.1",
+    "email-addresses": "2.0.2",
+    "html-to-text": "2.0.0",
+    "inline-css": "2.1.1",
+    "mailgun-js": "0.7.7"
+  }
+}
