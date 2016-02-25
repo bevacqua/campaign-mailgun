@@ -5,14 +5,13 @@ var mailgunjs = require('mailgun-js');
 var addrs = require('email-addresses');
 var inlineCss = require('inline-css');
 var htmlToText = require('html-to-text');
-var baseUrl = 'https://api.mailgun.net/v3';
 var noKey = 'campaign-mailgun: API key not set';
 
 function mailgun (options) {
   if (!options) {
     options = {};
   }
-  if (!options.apiKey && !process.env.MAILGUN_APIKEY) {
+  if (!options.apiKey) {
     warnNoKey();
     return {
       name: 'mailgun',
@@ -87,6 +86,7 @@ function mailgun (options) {
     }
 
     function post (html, images) {
+      var recipientVariables = parseMergeVariables();
       var inferConfig = {
         wordwrap: 130,
         linkHrefBaseUrl: options.authority,
@@ -94,20 +94,37 @@ function mailgun (options) {
       };
       var inferredText = htmlToText.fromString(html, inferConfig);
       var tags = [model._template].concat(model.provider.tags ? model.provider.tags : []);
-      var req = {
-        from: model.from,
-        to: model.to,
-        subject: model.subject,
-        html: html,
-        text: inferredText,
-        'o:tag': tags,
-        'o:tracking': true,
-        'o:tracking-clicks': true,
-        'o:tracking-opens': true,
-        'recipient-variables': parseMergeVariables(),
-        inline: images
-      };
-      client.messages().send(req, response);
+      var batches = getRecipientBatches();
+
+      contra.each(batches, 6, postBatch, responses);
+
+      function postBatch (batch, next) {
+        var req = {
+          from: model.from,
+          to: batch,
+          subject: model.subject,
+          html: html,
+          text: inferredText,
+          inline: images,
+          'o:tag': tags,
+          'o:tracking': true,
+          'o:tracking-clicks': true,
+          'o:tracking-opens': true,
+          'recipient-variables': recipientVariables
+        };
+        client.messages().send(req, next);
+      }
+      function responses (err, results) {
+        done(err, results);
+      }
+    }
+    function getRecipientBatches () {
+      var size = 1000; // "Note: The maximum number of recipients allowed for Batch Sending is 1,000."
+      var batches = [];
+      for (var i = 0; i < model.to.length; i += size) {
+        batches.push(model.to.slice(i, i + size));
+      }
+      return batches;
     }
     function parseMergeVariables () {
       var merge = model.provider.merge;
@@ -128,9 +145,6 @@ function mailgun (options) {
           }
         }
       }
-    }
-    function response (err, body) {
-      done(err, body);
     }
   }
 }
