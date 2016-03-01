@@ -38,6 +38,7 @@ function mailgun (options) {
   }
 
   function send (model, done) {
+    var merge = model.provider.merge;
     var domain = addrs.parseOneAddress(model.from).domain;
     var client = mailgunjs({
       apiKey: options.apiKey,
@@ -86,7 +87,6 @@ function mailgun (options) {
     }
 
     function post (html, images) {
-      var recipientVariables = parseMergeVariables();
       var inferConfig = {
         wordwrap: 130,
         linkHrefBaseUrl: options.authority,
@@ -95,8 +95,8 @@ function mailgun (options) {
       var inferredText = htmlToText.fromString(html, inferConfig);
       var tags = [model._template].concat(model.provider.tags ? model.provider.tags : []);
       var batches = getRecipientBatches();
-
-      contra.each(batches, 6, postBatch, responses);
+      expandWildcard();
+      contra.each(batches, 4, postBatch, responses);
 
       function postBatch (batch, next) {
         var req = {
@@ -105,12 +105,12 @@ function mailgun (options) {
           subject: model.subject,
           html: html,
           text: inferredText,
-          inline: images,
-          'o:tag': tags,
+          inline: images.slice(),
+          'o:tag': tags.slice(),
           'o:tracking': true,
           'o:tracking-clicks': true,
           'o:tracking-opens': true,
-          'recipient-variables': recipientVariables
+          'recipient-variables': parseMergeVariables(batch)
         };
         client.messages().send(req, next);
       }
@@ -119,19 +119,27 @@ function mailgun (options) {
       }
     }
     function getRecipientBatches () {
-      var size = 1000; // "Note: The maximum number of recipients allowed for Batch Sending is 1,000."
+      var size = 500; // "Note: The maximum number of recipients allowed for Batch Sending is 1,000."
       var batches = [];
       for (var i = 0; i < model.to.length; i += size) {
         batches.push(model.to.slice(i, i + size));
       }
       return batches;
     }
-    function parseMergeVariables () {
-      var merge = model.provider.merge;
+    function parseMergeVariables (batch) {
+      var variables = {};
+      batch.forEach(addVariables);
+      return variables;
+      function addVariables (recipient) {
+        if (merge[recipient]) {
+          variables[recipient] = merge[recipient];
+        }
+      }
+    }
+    function expandWildcard () {
       if ('*' in merge) {
         wildcarding();
       }
-      return merge;
       function wildcarding () {
         var wildcard = merge['*'];
         Object.keys(wildcard).forEach(addWildcardToRecipients);
