@@ -74,8 +74,7 @@ function mailgun (options) {
         return new client.Attachment({
           data: new Buffer(image.data, 'base64'),
           filename: image.name,
-          contentType: image.mime,
-          knownLength: image.data.length
+          contentType: image.mime
         });
       }
     }
@@ -119,7 +118,7 @@ function mailgun (options) {
       }
     }
     function getRecipientBatches () {
-      var size = 500; // "Note: The maximum number of recipients allowed for Batch Sending is 1,000."
+      var size = 250; // "Note: The maximum number of recipients allowed for Batch Sending is 1,000."
       var batches = [];
       for (var i = 0; i < model.to.length; i += size) {
         batches.push(model.to.slice(i, i + size));
