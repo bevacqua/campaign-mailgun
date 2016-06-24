@@ -1,3 +1,7 @@
+# 1.0.3 Bite-Sized
+
+- Remove style tags reducing byte size
+
 # 1.0.2 Batchelor
 
 - Reduced batch size to `250` due to [overflow bug in `mailgun-js`][1]

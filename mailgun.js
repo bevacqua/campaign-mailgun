@@ -52,8 +52,7 @@ function mailgun (options) {
 
     function inlineHtml (next) {
       var config = {
-        url: options.authority,
-        removeStyleTags: false
+        url: options.authority
       };
       inlineCss(model.html, config)
         .then(function inlined (html) { next(null, html); })

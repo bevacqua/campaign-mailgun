@@ -18,7 +18,7 @@
     "contra": "1.9.1",
     "email-addresses": "2.0.2",
     "html-to-text": "2.0.0",
-    "inline-css": "2.1.1",
+    "inline-css": "2.2.2",
     "mailgun-js": "0.7.7"
   }
 }
