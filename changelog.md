@@ -1,3 +1,7 @@
+# 1.0.4 Closed Captioning
+
+- Support for `cc` and `bcc` fields
+
 # 1.0.3 Bite-Sized
 
 - Remove style tags reducing byte size

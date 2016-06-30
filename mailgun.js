@@ -100,6 +100,8 @@ function mailgun (options) {
         var req = {
           from: model.from,
           to: batch,
+          cc: model.cc,
+          bcc: model.bcc,
           subject: model.subject,
           html: html,
           text: inferredText,
