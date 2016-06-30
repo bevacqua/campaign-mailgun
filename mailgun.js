@@ -49,7 +49,8 @@ function mailgun (options) {
 
     contra.concurrent({
       html: inlineHtml,
-      images: getImages
+      images: getImages,
+      attachments: getAttachments,
     }, ready);
 
     function inlineHtml (next) {
@@ -79,14 +80,26 @@ function mailgun (options) {
         });
       }
     }
+
+    function getAttachments (next) {
+      var attachments = model.attachments ? model.attachments : [];
+      next(null, attachments.map(transform));
+      function transform (attachment) {
+        return new client.Attachment({
+          data: attachment.file,
+          filename: attachment.name
+        });
+      }
+    }
+
     function ready (err, result) {
       if (err) {
         done(err); return;
       }
-      post(result.html, result.images);
+      post(result.html, result.images, result.attachments);
     }
 
-    function post (html, images) {
+    function post (html, images, attachments) {
       var inferConfig = {
         wordwrap: 130,
         linkHrefBaseUrl: options.authority,
@@ -108,6 +121,7 @@ function mailgun (options) {
           html: html,
           text: inferredText,
           inline: images.slice(),
+          attachment: attachments.slice(),
           'o:tag': tags.slice(),
           'o:tracking': true,
           'o:tracking-clicks': true,
