@@ -38,7 +38,9 @@ function mailgun (options) {
   }
 
   function send (model, done) {
-    var merge = model.provider.merge;
+    var provider = model.provider || {};
+    var providerTags = provider.tags || [];
+    var merge = provider.merge || {};
     var domain = addrs.parseOneAddress(model.from).domain;
     var client = mailgunjs({
       apiKey: options.apiKey,
@@ -91,7 +93,7 @@ function mailgun (options) {
         hideLinkHrefIfSameAsText: true
       };
       var inferredText = htmlToText.fromString(html, inferConfig);
-      var tags = [model._template].concat(model.provider.tags ? model.provider.tags : []);
+      var tags = [model._template].concat(providerTags);
       var batches = getRecipientBatches();
       expandWildcard();
       contra.each(batches, 4, postBatch, responses);
@@ -142,13 +144,13 @@ function mailgun (options) {
       }
       function wildcarding () {
         var wildcard = merge['*'];
-        Object.keys(wildcard).forEach(addWildcardToRecipients);
-        function addWildcardToRecipients (key) {
-          merge.forEach(addWildcardToRecipient);
-          function addWildcardToRecipient (recipient) {
+        Object.keys(merge).forEach(addWildcardToRecipient);
+        function addWildcardToRecipient (recipient) {
+          Object.keys(wildcard).forEach(addWildcardKeyToRecipient);
+          function addWildcardKeyToRecipient (key) {
             // don't override: wildcard has default values
-            if (!recipient.hasOwnProperty(key)) {
-              recipient[key] = wildcard[key];
+            if (!merge[recipient].hasOwnProperty(key)) {
+              merge[recipient][key] = wildcard[key];
             }
           }
         }

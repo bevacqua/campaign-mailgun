@@ -1,4 +1,4 @@
-# 1.0.4 Closed Captioning
+# 1.0.5 Closed Captioning
 
 - Support for `cc` and `bcc` fields
 
