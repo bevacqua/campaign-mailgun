@@ -95,7 +95,7 @@ function mailgun (options) {
       var inferredText = htmlToText.fromString(html, inferConfig);
       var tags = [model._template].concat(providerTags);
       var batches = getRecipientBatches();
-      expandWildcard();
+      expandWildcard(model.to, model.cc, model.bcc);
       contra.each(batches, 4, postBatch, responses);
 
       function postBatch (batch, next) {
@@ -112,7 +112,7 @@ function mailgun (options) {
           'o:tracking': true,
           'o:tracking-clicks': true,
           'o:tracking-opens': true,
-          'recipient-variables': parseMergeVariables(batch)
+          'recipient-variables': parseMergeVariables(batch, model.cc, model.bcc)
         };
         client.messages().send(req, next);
       }
@@ -128,9 +128,12 @@ function mailgun (options) {
       }
       return batches;
     }
-    function parseMergeVariables (batch) {
+    function parseMergeVariables (to, cc, bcc) {
       var variables = {};
-      batch.forEach(addVariables);
+      to
+        .concat(cc)
+        .concat(bcc)
+        .forEach(addVariables);
       return variables;
       function addVariables (recipient) {
         if (merge[recipient]) {
@@ -138,17 +141,23 @@ function mailgun (options) {
         }
       }
     }
-    function expandWildcard () {
+    function expandWildcard (to, cc, bcc) {
       if ('*' in merge) {
         wildcarding();
       }
       function wildcarding () {
         var wildcard = merge['*'];
-        Object.keys(merge).forEach(addWildcardToRecipient);
+        to
+          .concat(cc)
+          .concat(bcc)
+          .forEach(addWildcardToRecipient);
         function addWildcardToRecipient (recipient) {
           Object.keys(wildcard).forEach(addWildcardKeyToRecipient);
           function addWildcardKeyToRecipient (key) {
             // don't override: wildcard has default values
+            if (!merge[recipient]) {
+              merge[recipient] = {};
+            }
             if (!merge[recipient].hasOwnProperty(key)) {
               merge[recipient][key] = wildcard[key];
             }
