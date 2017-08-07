@@ -34,7 +34,7 @@ the API key from Mailgun.
 
 ## `options.authority`
 
-your domain's origin for relative links.
+your domain's origin for relative links. can also be provided on `client.send` calls.
 
 # license
 

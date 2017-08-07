@@ -42,6 +42,7 @@ function mailgun (options) {
     var providerTags = provider.tags || [];
     var merge = provider.merge || {};
     var domain = addrs.parseOneAddress(model.from).domain;
+    var authority = model.authority || options.authority
     var client = mailgunjs({
       apiKey: options.apiKey,
       domain: domain
@@ -55,7 +56,7 @@ function mailgun (options) {
 
     function inlineHtml (next) {
       var config = {
-        url: options.authority
+        url: authority
       };
       inlineCss(model.html, config)
         .then(function inlined (html) { next(null, html); })
@@ -102,7 +103,7 @@ function mailgun (options) {
     function post (html, images, attachments) {
       var inferConfig = {
         wordwrap: 130,
-        linkHrefBaseUrl: options.authority,
+        linkHrefBaseUrl: authority,
         hideLinkHrefIfSameAsText: true
       };
       var inferredText = htmlToText.fromString(html, inferConfig);
