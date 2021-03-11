@@ -1,13 +1,11 @@
 'use strict';
 
-const contra = require('contra');
-const Mailgun = require('mailgun.js');
-const formData = require('form-data');
-const mailgun = new Mailgun(formData);
-const addrs = require('email-addresses');
-const inlineCss = require('inline-css');
-const htmlToText = require('html-to-text');
-const noKey = 'campaign-mailgun: API key not set';
+var contra = require('contra');
+var mailgunjs = require('mailgun-js');
+var addrs = require('email-addresses');
+var inlineCss = require('inline-css');
+var htmlToText = require('html-to-text');
+var noKey = 'campaign-mailgun: API key not set';
 
 function mailgun (options) {
   if (!options) {
@@ -40,15 +38,14 @@ function mailgun (options) {
   }
 
   function send (model, done) {
-    const provider = model.provider || {};
-    const providerTags = provider.tags || [];
-    const merge = provider.merge || {};
-    const domain = addrs.parseOneAddress(model.from).domain;
-    const authority = model.authority || options.authority
-    const mg = mailgun.client({
-      username: 'api',
-      key: options.apiKey,
-      host: authority
+    var provider = model.provider || {};
+    var providerTags = provider.tags || [];
+    var merge = provider.merge || {};
+    var domain = addrs.parseOneAddress(model.from).domain;
+    var authority = model.authority || options.authority
+    var client = mailgunjs({
+      apiKey: options.apiKey,
+      domain: domain
     });
 
     contra.concurrent({
@@ -58,7 +55,7 @@ function mailgun (options) {
     }, ready);
 
     function inlineHtml (next) {
-      const config = {
+      var config = {
         url: authority
       };
       inlineCss(model.html, config)
@@ -67,7 +64,7 @@ function mailgun (options) {
     }
 
     function getImages (next) {
-      const images = model.images ? model.images : [];
+      var images = model.images ? model.images : [];
       if (model._header) {
         images.unshift({
           name: '_header',
@@ -77,22 +74,22 @@ function mailgun (options) {
       }
       next(null, images.map(transform));
       function transform (image) {
-        return {
-          data: Buffer.from(image.data, 'base64'),
+        return new client.Attachment({
+          data: new Buffer(image.data, 'base64'),
           filename: image.name,
           contentType: image.mime
-        };
+        });
       }
     }
 
     function getAttachments (next) {
-      const attachments = model.attachments ? model.attachments : [];
+      var attachments = model.attachments ? model.attachments : [];
       next(null, attachments.map(transform));
       function transform (attachment) {
-        return {
+        return new client.Attachment({
           data: attachment.file,
           filename: attachment.name
-        };
+        });
       }
     }
 
@@ -104,30 +101,19 @@ function mailgun (options) {
     }
 
     function post (html, images, attachments) {
-      const inferConfig = {
+      var inferConfig = {
         wordwrap: 130,
-        tags: {
-            'a': {
-              options: {
-                baseUrl: authority,
-                hideLinkHrefIfSameAsText: true
-              }
-            },
-            'img': {
-              options: {
-                baseUrl: authority
-              }
-            }
-        }
+        linkHrefBaseUrl: authority,
+        hideLinkHrefIfSameAsText: true
       };
-      const inferredText = htmlToText(html, inferConfig);
-      const tags = [model._template].concat(providerTags);
-      const batches = getRecipientBatches();
+      var inferredText = htmlToText.fromString(html, inferConfig);
+      var tags = [model._template].concat(providerTags);
+      var batches = getRecipientBatches();
       expandWildcard(model.to, model.cc, model.bcc);
       contra.each(batches, 4, postBatch, responses);
 
       function postBatch (batch, next) {
-        const req = {
+        var req = {
           from: model.from,
           to: batch,
           cc: model.cc,
@@ -137,28 +123,32 @@ function mailgun (options) {
           text: inferredText,
           inline: images.slice(),
           attachment: attachments.slice(),
-          'o:tag': tags.slice().join(','),
-          'o:tracking': 'yes',
-          'o:tracking-clicks': 'yes',
-          'o:tracking-opens': 'yes',
+          'o:tag': tags.slice(),
+          'o:tracking': true,
+          'o:tracking-clicks': true,
+          'o:tracking-opens': true,
           'recipient-variables': parseMergeVariables(batch, model.cc, model.bcc)
         };
-        client.messages.send(domain, req);
+        if (model.replyTo) {
+          req["h:Reply-To"] = model.replyTo;
+        }
+        console.log(req);
+        client.messages().send(req, next);
       }
       function responses (err, results) {
         done(err, results);
       }
     }
     function getRecipientBatches () {
-      const size = 250; // "Note: The maximum number of recipients allowed for Batch Sending is 1,000."
-      const batches = [];
-      for (let i = 0; i < model.to.length; i += size) {
+      var size = 250; // "Note: The maximum number of recipients allowed for Batch Sending is 1,000."
+      var batches = [];
+      for (var i = 0; i < model.to.length; i += size) {
         batches.push(model.to.slice(i, i + size));
       }
       return batches;
     }
     function parseMergeVariables (to, cc, bcc) {
-      const variables = {};
+      var variables = {};
       to
         .concat(cc)
         .concat(bcc)
@@ -175,7 +165,7 @@ function mailgun (options) {
         wildcarding();
       }
       function wildcarding () {
-        const wildcard = merge['*'];
+        var wildcard = merge['*'];
         to
           .concat(cc)
           .concat(bcc)
