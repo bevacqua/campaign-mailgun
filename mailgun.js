@@ -1,11 +1,11 @@
 'use strict';
 
-var contra = require('contra');
-var mailgunjs = require('mailgun-js');
-var addrs = require('email-addresses');
-var inlineCss = require('inline-css');
-var htmlToText = require('html-to-text');
-var noKey = 'campaign-mailgun: API key not set';
+const contra = require('contra');
+const mailgunjs = require('mailgun-js');
+const addrs = require('email-addresses');
+const inlineCss = require('inline-css');
+const { htmlToText } = require('html-to-text');
+const noKey = 'campaign-mailgun: API key not set';
 
 function mailgun (options) {
   if (!options) {
@@ -38,12 +38,12 @@ function mailgun (options) {
   }
 
   function send (model, done) {
-    var provider = model.provider || {};
-    var providerTags = provider.tags || [];
-    var merge = provider.merge || {};
-    var domain = addrs.parseOneAddress(model.from).domain;
-    var authority = model.authority || options.authority
-    var client = mailgunjs({
+    const provider = model.provider || {};
+    const providerTags = provider.tags || [];
+    const merge = provider.merge || {};
+    const domain = addrs.parseOneAddress(model.from).domain;
+    const authority = model.authority || options.authority
+    const client = mailgunjs({
       apiKey: options.apiKey,
       domain: domain
     });
@@ -55,7 +55,7 @@ function mailgun (options) {
     }, ready);
 
     function inlineHtml (next) {
-      var config = {
+      const config = {
         url: authority
       };
       inlineCss(model.html, config)
@@ -64,7 +64,7 @@ function mailgun (options) {
     }
 
     function getImages (next) {
-      var images = model.images ? model.images : [];
+      const images = model.images ? model.images : [];
       if (model._header) {
         images.unshift({
           name: '_header',
@@ -83,7 +83,7 @@ function mailgun (options) {
     }
 
     function getAttachments (next) {
-      var attachments = model.attachments ? model.attachments : [];
+      const attachments = model.attachments ? model.attachments : [];
       next(null, attachments.map(transform));
       function transform (attachment) {
         return new client.Attachment({
@@ -101,19 +101,30 @@ function mailgun (options) {
     }
 
     function post (html, images, attachments) {
-      var inferConfig = {
+      const inferConfig = {
         wordwrap: 130,
-        linkHrefBaseUrl: authority,
-        hideLinkHrefIfSameAsText: true
+        tags: {
+          'a': {
+            options: {
+              baseUrl: authority,
+              hideLinkHrefIfSameAsText:true
+            }
+          },
+          'img': {
+            options: {
+              baseUrl: authority
+            }
+          }
+        }
       };
-      var inferredText = htmlToText.fromString(html, inferConfig);
-      var tags = [model._template].concat(providerTags);
-      var batches = getRecipientBatches();
+      const inferredText = htmlToText(html, inferConfig);
+      const tags = [model._template].concat(providerTags);
+      const batches = getRecipientBatches();
       expandWildcard(model.to, model.cc, model.bcc);
       contra.each(batches, 4, postBatch, responses);
 
       function postBatch (batch, next) {
-        var req = {
+        const req = {
           from: model.from,
           to: batch,
           cc: model.cc,
@@ -140,15 +151,15 @@ function mailgun (options) {
       }
     }
     function getRecipientBatches () {
-      var size = 250; // "Note: The maximum number of recipients allowed for Batch Sending is 1,000."
-      var batches = [];
-      for (var i = 0; i < model.to.length; i += size) {
+      const size = 250; // "Note: The maximum number of recipients allowed for Batch Sending is 1,000."
+      const batches = [];
+      for (let i = 0; i < model.to.length; i += size) {
         batches.push(model.to.slice(i, i + size));
       }
       return batches;
     }
     function parseMergeVariables (to, cc, bcc) {
-      var variables = {};
+      const variables = {};
       to
         .concat(cc)
         .concat(bcc)
@@ -165,7 +176,7 @@ function mailgun (options) {
         wildcarding();
       }
       function wildcarding () {
-        var wildcard = merge['*'];
+        const wildcard = merge['*'];
         to
           .concat(cc)
           .concat(bcc)

@@ -19,6 +19,6 @@
     "email-addresses": "4.0.0",
     "html-to-text": "7.0.0",
     "inline-css": "3.0.0",
-    "mailgun.js": "3.2.1"
+    "mailgun-js": "0.22.0"
   }
 }
