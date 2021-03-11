@@ -132,7 +132,7 @@ function mailgun (options) {
         if (model.replyTo) {
           req["h:Reply-To"] = model.replyTo;
         }
-        console.log(req);
+
         client.messages().send(req, next);
       }
       function responses (err, results) {
