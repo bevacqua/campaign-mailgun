@@ -1,10 +1,11 @@
 'use strict';
 
 const contra = require('contra');
-const mailgunjs = require('mailgun-js');
+const Mailgun = require('mailgun.js');
+const formData = require('form-data');
 const addrs = require('email-addresses');
 const inlineCss = require('inline-css');
-const { htmlToText } = require('html-to-text');
+const { convert } = require('html-to-text');
 const noKey = 'campaign-mailgun: API key not set';
 
 function mailgun (options) {
@@ -43,9 +44,10 @@ function mailgun (options) {
     const merge = provider.merge || {};
     const domain = addrs.parseOneAddress(model.from).domain;
     const authority = model.authority || options.authority
-    const client = mailgunjs({
-      apiKey: options.apiKey,
-      domain: domain
+    const mailgun = new Mailgun(formData);
+    const client = mailgun.client({
+      key: options.apiKey,
+      username: domain
     });
 
     contra.concurrent({
@@ -74,11 +76,11 @@ function mailgun (options) {
       }
       next(null, images.map(transform));
       function transform (image) {
-        return new client.Attachment({
-          data: new Buffer(image.data, 'base64'),
+        return {
+          data: Buffer.from(image.data, 'base64'),
           filename: image.name,
           contentType: image.mime
-        });
+        };
       }
     }
 
@@ -86,10 +88,10 @@ function mailgun (options) {
       const attachments = model.attachments ? model.attachments : [];
       next(null, attachments.map(transform));
       function transform (attachment) {
-        return new client.Attachment({
+        return {
           data: attachment.file,
           filename: attachment.name
-        });
+        };
       }
     }
 
@@ -103,21 +105,21 @@ function mailgun (options) {
     function post (html, images, attachments) {
       const inferConfig = {
         wordwrap: 130,
-        tags: {
-          'a': {
+        selectors: [{
+            selector:'a',
             options: {
               baseUrl: authority,
               hideLinkHrefIfSameAsText:true
             }
-          },
-          'img': {
+          },{
+            selector: 'img',
             options: {
               baseUrl: authority
             }
           }
-        }
+        ]
       };
-      const inferredText = htmlToText(html, inferConfig);
+      const inferredText = convert(html, inferConfig);
       const tags = [model._template].concat(providerTags);
       const batches = getRecipientBatches();
       expandWildcard(model.to, model.cc, model.bcc);

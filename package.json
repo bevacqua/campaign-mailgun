@@ -17,8 +17,9 @@
   "dependencies": {
     "contra": "1.9.4",
     "email-addresses": "4.0.0",
-    "html-to-text": "7.0.0",
+    "form-data": "^4.0.0",
+    "html-to-text": "8.0.0",
     "inline-css": "3.0.0",
-    "mailgun-js": "0.22.0"
+    "mailgun.js": "3.5.4"
   }
 }
