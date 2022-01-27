@@ -1,6 +1,5 @@
 'use strict';
 
-const contra = require('contra');
 const Mailgun = require('mailgun.js');
 const formData = require('form-data');
 const addrs = require('email-addresses');
@@ -33,12 +32,12 @@ function mailgun (options) {
     console.warn(noKey);
   }
 
-  function sendNoKey (model, done) {
+  function sendNoKey (model) {
     warnNoKey();
-    done(new Error(noKey));
+    throw new Error(noKey);
   }
 
-  function send (model, done) {
+  async function send (model) {
     const provider = model.provider || {};
     const providerTags = provider.tags || [];
     const merge = provider.merge || {};
@@ -49,23 +48,20 @@ function mailgun (options) {
       key: options.apiKey,
       username: domain
     });
+    const html = await inlineHtml();
+    const images = await getImages();
+    const attachments = await getAttachments();
 
-    contra.concurrent({
-      html: inlineHtml,
-      images: getImages,
-      attachments: getAttachments,
-    }, ready);
+    post(html, images, attachments);
 
-    function inlineHtml (next) {
+    function inlineHtml () {
       const config = {
         url: authority
       };
-      inlineCss(model.html, config)
-        .then(function inlined (html) { next(null, html); })
-        .catch(function failed (err) { next(err); });
+      return inlineCss(model.html, config);
     }
 
-    function getImages (next) {
+    function getImages () {
       const images = model.images ? model.images : [];
       if (model._header) {
         images.unshift({
@@ -74,32 +70,23 @@ function mailgun (options) {
           mime: model._header.mime
         });
       }
-      next(null, images.map(transform));
-      function transform (image) {
+      return Promise.all(images.map((image) => {
         return {
           data: Buffer.from(image.data, 'base64'),
           filename: image.name,
           contentType: image.mime
         };
-      }
+      }));
     }
 
-    function getAttachments (next) {
+    function getAttachments () {
       const attachments = model.attachments ? model.attachments : [];
-      next(null, attachments.map(transform));
-      function transform (attachment) {
+      return Promise.all(attachments.map((attachment) => {
         return {
           data: attachment.file,
           filename: attachment.name
         };
-      }
-    }
-
-    function ready (err, result) {
-      if (err) {
-        done(err); return;
-      }
-      post(result.html, result.images, result.attachments);
+      }));
     }
 
     function post (html, images, attachments) {
@@ -123,9 +110,20 @@ function mailgun (options) {
       const tags = [model._template].concat(providerTags);
       const batches = getRecipientBatches();
       expandWildcard(model.to, model.cc, model.bcc);
-      contra.each(batches, 4, postBatch, responses);
+      const results = [];
+      batches.forEach(async (batch) => {
+        try {
+          const response = await postBatch(batch);
+          results.push(response);
+        } catch (err) {
+          results.push({batch, error: err});
+          console.log('ERROR SENDING', err);
+        }
+      });
 
-      function postBatch (batch, next) {
+      return results;
+
+      async function postBatch (batch) {
         const req = {
           from: model.from,
           to: batch,
@@ -137,19 +135,16 @@ function mailgun (options) {
           inline: images.slice(),
           attachment: attachments.slice(),
           'o:tag': tags.slice(),
-          'o:tracking': true,
-          'o:tracking-clicks': true,
-          'o:tracking-opens': true,
+          'o:tracking': 'true',
+          'o:tracking-clicks': 'true',
+          'o:tracking-opens': 'true',
           'recipient-variables': parseMergeVariables(batch, model.cc, model.bcc)
         };
         if (model.replyTo) {
           req["h:Reply-To"] = model.replyTo;
         }
 
-        client.messages().send(req, next);
-      }
-      function responses (err, results) {
-        done(err, results);
+        return client.messages.create(domain, req);
       }
     }
     function getRecipientBatches () {
@@ -166,7 +161,7 @@ function mailgun (options) {
         .concat(cc)
         .concat(bcc)
         .forEach(addVariables);
-      return variables;
+      return JSON.stringify(variables);
       function addVariables (recipient) {
         if (merge[recipient]) {
           variables[recipient] = merge[recipient];
