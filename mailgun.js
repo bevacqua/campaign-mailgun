@@ -46,13 +46,14 @@ function mailgun (options) {
     const mailgun = new Mailgun(formData);
     const client = mailgun.client({
       key: options.apiKey,
-      username: domain
+      username: options.username || 'api'
     });
+
     const html = await inlineHtml();
     const images = await getImages();
     const attachments = await getAttachments();
 
-    post(html, images, attachments);
+    return post(html, images, attachments);
 
     function inlineHtml () {
       const config = {
@@ -89,7 +90,7 @@ function mailgun (options) {
       }));
     }
 
-    function post (html, images, attachments) {
+    async function post (html, images, attachments) {
       const inferConfig = {
         wordwrap: 130,
         selectors: [{
@@ -110,16 +111,10 @@ function mailgun (options) {
       const tags = [model._template].concat(providerTags);
       const batches = getRecipientBatches();
       expandWildcard(model.to, model.cc, model.bcc);
-      const results = [];
-      batches.forEach(async (batch) => {
-        try {
-          const response = await postBatch(batch);
-          results.push(response);
-        } catch (err) {
-          results.push({batch, error: err});
-          console.log('ERROR SENDING', err);
-        }
-      });
+
+      const results = await Promise.allSettled(batches.map(async (batch) => {
+        return postBatch(batch);
+      }));
 
       return results;
 
