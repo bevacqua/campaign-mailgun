@@ -15,10 +15,11 @@
   "licenses": "MIT",
   "main": "mailgun.js",
   "dependencies": {
-    "contra": "1.9.1",
-    "email-addresses": "2.0.2",
-    "html-to-text": "2.0.0",
-    "inline-css": "2.2.2",
-    "mailgun-js": "0.7.7"
+    "email-addresses": "5.0.0",
+    "eslint": "^8.8.0",
+    "form-data": "^4.0.0",
+    "html-to-text": "8.1.0",
+    "inline-css": "3.0.0",
+    "mailgun.js": "4.2.1"
   }
 }

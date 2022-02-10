@@ -1,11 +1,11 @@
 'use strict';
 
-var contra = require('contra');
-var mailgunjs = require('mailgun-js');
-var addrs = require('email-addresses');
-var inlineCss = require('inline-css');
-var htmlToText = require('html-to-text');
-var noKey = 'campaign-mailgun: API key not set';
+const Mailgun = require('mailgun.js');
+const formData = require('form-data');
+const addrs = require('email-addresses');
+const inlineCss = require('inline-css');
+const { convert } = require('html-to-text');
+const noKey = 'campaign-mailgun: API key not set';
 
 function mailgun (options) {
   if (!options) {
@@ -32,39 +32,38 @@ function mailgun (options) {
     console.warn(noKey);
   }
 
-  function sendNoKey (model, done) {
+  function sendNoKey (model) {
     warnNoKey();
-    done(new Error(noKey));
+    throw new Error(noKey);
   }
 
-  function send (model, done) {
-    var provider = model.provider || {};
-    var providerTags = provider.tags || [];
-    var merge = provider.merge || {};
-    var domain = addrs.parseOneAddress(model.from).domain;
-    var authority = model.authority || options.authority
-    var client = mailgunjs({
-      apiKey: options.apiKey,
-      domain: domain
+  async function send (model) {
+    const provider = model.provider || {};
+    const providerTags = provider.tags || [];
+    const merge = provider.merge || {};
+    const domain = addrs.parseOneAddress(model.from).domain;
+    const authority = model.authority || options.authority
+    const mailgun = new Mailgun(formData);
+    const client = mailgun.client({
+      key: options.apiKey,
+      username: options.username || 'api'
     });
 
-    contra.concurrent({
-      html: inlineHtml,
-      images: getImages,
-      attachments: getAttachments,
-    }, ready);
+    const html = await inlineHtml();
+    const images = await getImages();
+    const attachments = await getAttachments();
 
-    function inlineHtml (next) {
-      var config = {
+    return post(html, images, attachments);
+
+    function inlineHtml () {
+      const config = {
         url: authority
       };
-      inlineCss(model.html, config)
-        .then(function inlined (html) { next(null, html); })
-        .catch(function failed (err) { next(err); });
+      return inlineCss(model.html, config);
     }
 
-    function getImages (next) {
-      var images = model.images ? model.images : [];
+    function getImages () {
+      const images = model.images ? model.images : [];
       if (model._header) {
         images.unshift({
           name: '_header',
@@ -72,48 +71,55 @@ function mailgun (options) {
           mime: model._header.mime
         });
       }
-      next(null, images.map(transform));
-      function transform (image) {
-        return new client.Attachment({
-          data: new Buffer(image.data, 'base64'),
+      return Promise.all(images.map((image) => {
+        return {
+          data: Buffer.from(image.data, 'base64'),
           filename: image.name,
           contentType: image.mime
-        });
-      }
+        };
+      }));
     }
 
-    function getAttachments (next) {
-      var attachments = model.attachments ? model.attachments : [];
-      next(null, attachments.map(transform));
-      function transform (attachment) {
-        return new client.Attachment({
+    function getAttachments () {
+      const attachments = model.attachments ? model.attachments : [];
+      return Promise.all(attachments.map((attachment) => {
+        return {
           data: attachment.file,
           filename: attachment.name
-        });
-      }
+        };
+      }));
     }
 
-    function ready (err, result) {
-      if (err) {
-        done(err); return;
-      }
-      post(result.html, result.images, result.attachments);
-    }
-
-    function post (html, images, attachments) {
-      var inferConfig = {
+    async function post (html, images, attachments) {
+      const inferConfig = {
         wordwrap: 130,
-        linkHrefBaseUrl: authority,
-        hideLinkHrefIfSameAsText: true
+        selectors: [{
+            selector:'a',
+            options: {
+              baseUrl: authority,
+              hideLinkHrefIfSameAsText:true
+            }
+          },{
+            selector: 'img',
+            options: {
+              baseUrl: authority
+            }
+          }
+        ]
       };
-      var inferredText = htmlToText.fromString(html, inferConfig);
-      var tags = [model._template].concat(providerTags);
-      var batches = getRecipientBatches();
+      const inferredText = convert(html, inferConfig);
+      const tags = [model._template].concat(providerTags);
+      const batches = getRecipientBatches();
       expandWildcard(model.to, model.cc, model.bcc);
-      contra.each(batches, 4, postBatch, responses);
 
-      function postBatch (batch, next) {
-        var req = {
+      const results = await Promise.allSettled(batches.map(async (batch) => {
+        return postBatch(batch);
+      }));
+
+      return results;
+
+      async function postBatch (batch) {
+        const req = {
           from: model.from,
           to: batch,
           cc: model.cc,
@@ -124,32 +130,33 @@ function mailgun (options) {
           inline: images.slice(),
           attachment: attachments.slice(),
           'o:tag': tags.slice(),
-          'o:tracking': true,
-          'o:tracking-clicks': true,
-          'o:tracking-opens': true,
+          'o:tracking': 'true',
+          'o:tracking-clicks': 'true',
+          'o:tracking-opens': 'true',
           'recipient-variables': parseMergeVariables(batch, model.cc, model.bcc)
         };
-        client.messages().send(req, next);
-      }
-      function responses (err, results) {
-        done(err, results);
+        if (model.replyTo) {
+          req["h:Reply-To"] = model.replyTo;
+        }
+
+        return client.messages.create(domain, req);
       }
     }
     function getRecipientBatches () {
-      var size = 250; // "Note: The maximum number of recipients allowed for Batch Sending is 1,000."
-      var batches = [];
-      for (var i = 0; i < model.to.length; i += size) {
+      const size = 250; // "Note: The maximum number of recipients allowed for Batch Sending is 1,000."
+      const batches = [];
+      for (let i = 0; i < model.to.length; i += size) {
         batches.push(model.to.slice(i, i + size));
       }
       return batches;
     }
     function parseMergeVariables (to, cc, bcc) {
-      var variables = {};
+      const variables = {};
       to
         .concat(cc)
         .concat(bcc)
         .forEach(addVariables);
-      return variables;
+      return JSON.stringify(variables);
       function addVariables (recipient) {
         if (merge[recipient]) {
           variables[recipient] = merge[recipient];
@@ -161,7 +168,7 @@ function mailgun (options) {
         wildcarding();
       }
       function wildcarding () {
-        var wildcard = merge['*'];
+        const wildcard = merge['*'];
         to
           .concat(cc)
           .concat(bcc)
